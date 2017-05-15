@@ -14,18 +14,18 @@ def main():
     parser.add_argument('--url',
                     help='Gitlab URL',
                     default='https://gitlab.fhnw.ch/')
-    parser.add_argument('--projectid',
-                    help='Gitlab project',
-                    type=int,
-                    default=376)
+    parser.add_argument('--project',
+                    help='Gitlab project name (i.e. webteam/fhnw.webauftritt)',
+                    default='tom.schneider/my_issues')
     args = parser.parse_args()
     gl = gitlab.Gitlab(args.url, args.token)
+    project = gl.projects.get(args.project)
     with open(args.file) as csvfile:
         reader = csv.DictReader(csvfile, delimiter=';')
         for row in reader:
             data = {'title': row['title'],
                     'description': row['description'],}
-            gl.project_issues.create(data, project_id=args.projectid)
+            gl.project_issues.create(data, project_id=project.id)
 
 if __name__ == '__main__':
     main()
