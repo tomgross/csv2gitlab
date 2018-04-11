@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 import argparse
 import csv
+import datetime
 import gitlab
 import pickle
 import iso8601
@@ -11,8 +12,10 @@ import numpy
 # private token authentication
 
 def enc(s):
-    if isinstance(s, unicode):
+    if isinstance(s, bytes):
         return s.encode('utf-8')
+    if isinstance(s, str):
+        return s
     elif isinstance(s, int):
         return s
     elif isinstance(s, bool):
@@ -36,9 +39,11 @@ def main():
                     default='webteam/fhnw.webauftritt')
     args = parser.parse_args()
     gl = gitlab.Gitlab(args.url, args.token)
-    #issues =  gl.project_issues.list(project_id=25,all=True)
+    print(args.project)
+    project = gl.projects.get(id=25)
+    #issues =  project.issues.list(all=True)
     #pickle.dump(issues, open( "save.p", "wb" ) )
-    print('Saved issues')
+    #print('Saved issues')
     issues = pickle.load(open('save.p', 'rb'))
     fieldnames = ['iid', 'id', 'title', 'state', 'created_at', 'updated_at', 'closed_at', 'closed_week']
     f = open('issues.csv', 'w')
@@ -46,11 +51,11 @@ def main():
     writer.writeheader()
     issue_number = len(issues)
     all_issues = []
-    weeks = {w: 0 for w in range(1, 53)}
+    weeks = {}
     for i, issue in enumerate(issues):
-        print('{:4d}/{:4d}'.format(i, issue_number))
-        d = {key: enc(val) for key, val in issue.as_dict().items()
+        d = {key: enc(val) for key, val in issue.attributes.items()
                          if key in fieldnames}
+        print('{:4d}/{:4d} - ({})'.format(i, issue_number, d))
         try:
              notes = issue.notes.list()
         except gitlab.exceptions.GitlabConnectionError:
@@ -61,9 +66,9 @@ def main():
             if c:
                 closed_at = c[0].encode('utf-8')
                 d['closed_at'] = closed_at
-                d['closed_week'] = iso8601.parse_date(closed_at).isocalendar()[1]
+                closed_date = iso8601.parse_date(closed_at.decode('utf-8'))
             else:
-                bodys = [x.body.lower() for x in notes if isinstance(x.body, unicode) and 'moved' in x.body.lower()]
+                bodys = [x.body.lower() for x in notes if isinstance(x.body, (str, bytes)) and 'moved' in x.body.lower()]
                 if bodys:
                     continue   # ignore all issues not ment to be here
                 else:
@@ -71,16 +76,23 @@ def main():
                     print 
                     print(bodys)
                     d['closed_at'] = d['updated_at']
-                    d['closed_week'] = iso8601.parse_date(d['updated_at']).isocalendar()[1]
+                    closed_date = iso8601.parse_date(d['updated_at'].decode('utf-8'))
+            if True:  # closed_date.replace(tzinfo=None) > datetime.datetime(2017,4,1):
+                d['closed_week'] = '{:4d}-{:2d}'.format(closed_date.year, closed_date.month)
+                # d['closed_week'] = '{:4d}-{:2d}'.format(*closed_date.isocalendar()[:2])
+            else:
+                d['closed_week'] = ''
         else:
             d['closed_at'] = ''
             d['closed_week'] = ''
         #writer.writerow(d)
         all_issues.append(d)
         if d['closed_week']:
+            if d['closed_week'] not in weeks:
+                weeks[d['closed_week']] = 0
             weeks[d['closed_week']] += 1
+    issues_count = list(weeks.values())
     print(weeks)
-    issues_count = weeks.values()
     print('Minimum gelöst: {0} '.format(min([x for x in issues_count if x])))
     print('Maximum gelöst: {0} '.format(max(issues_count)))
     print('Median: {0} '.format(numpy.median(issues_count)))
@@ -90,7 +102,7 @@ def main():
     wX = weeks.keys()
     wY = issues_count
     plt.plot(wX, wY)
-    plt.xlabel(u'Woche')
+    plt.xlabel(u'Monat')
     plt.ylabel(u'gelöste Issues')
     plt.show()
     #f.close()
