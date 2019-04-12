@@ -1,5 +1,5 @@
-python-gitlab==1.3.0
-requests==2.18.4
-six==1.11.0
+python-gitlab==1.8.0
+requests==2.21.0
+six==1.12.0
 iso8601
 matplotlib
